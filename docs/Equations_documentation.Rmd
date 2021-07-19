@@ -76,48 +76,62 @@ We (initially) assume a constant stoichiometric rate between C and Ca, $\rho= \f
 The model approximates the organic matter in the system as two different qualities, each following a specific kinetic. The fast pools are represented by decomposing organic material of plant origin, decomposing with kinetic $k_1$, and the slow pool consist of already decomposed organic material (for example humified litter or soil organic matter, all approximated in this model as litter, $L_C$) decomposing with kinetic $k_2$.
 The sources of organic material (defining two fast pools) considered in the model are litterfall ($F_C$) and CWD (Coarse Dead Wood) from dead trees ($D_C$), each defined as a separate flux of C. We assume both these materials to decompose with the same kinetic $k \cdot r$. 
 
+**The model is considered in its step version for simplicity. This requires all variables to be expressed as integrated over the time unit of the model, so years. All the $Ca^{++}$ data are already expressed per year so no action is required there for the model to use them directly.**
 
-The two fast pools, akin to the Y pool in the original ICBM formulation, are the litterfall $F$:
+The two fast pools, akin to the Y pool in the original ICBM formulation, are the litterfall $F_C$:
 $$
-\frac{dF_C}{dt}= i_{F_c} - k_1 r F_C
+F_{C,t+1}=(F_{C,t}+I_{F_C,t}) \cdot e^{k_1r}
 $$
-and the coarse dead wood $D$:
+and the coarse dead wood $D_C$:
+
 $$
-\frac{dD_C}{dt}= i_{D_c} - k_1 r D_C
+D_{C,t+1}=(D_{C,t}+I_{D_C,t}) \cdot e^{k_1r}
 $$
+
 Where $i_{F_c}$ and $i_{D_c}$ are the C inputs from litterfall and CWD.
 
 A fraction ($h$) of these two pools is then decomposed further into the slower pool $L_C$, which itself decomposes at speed $k_2$:
 
 
 $$
-\frac{dL_C}{dt}= h k_1 r F_C + h k_1 r D_C - k_2 r L_C
+L_{C,t+1}=(L_{C,t} - \phi_{F_c} - \phi_{D_c}) \cdot e^{k_2r} + (\phi_{F_c} + \phi_{D_c}) \cdot e^{k_1r}
 $$
-This allows us to identify another pool, defined implicitly in the original ICBM formulation, which is the amount of organic matter respired $R$.
+Where $\phi_{n_C}$ is the flux of material from the two faster pools $F_C$ and $D_C$ defined by a term $h$ between 0 and 1, which expresses how much of the material decomposing from each faster pool is incorporated in the slower pool:
+$$
+\phi_{F_C, t}=h_{F_c} \frac{(k_1*F_{C,t}+I_{F_C,t})}{k_2-k_1}
+$$
+$$
+\phi_{D_C, t}=h_{D_c} \frac{(k_1*D_{C,t}+I_{D_C,t})}{k_2-k_1}
+$$
+The fractions $h_{F_c}$ and $h_{D_c}$ are assumed to differ, while the kinetic term $k_1$ is assumed to be the same for both materials.
+
+These fluxes allow us to define also the reciplrocal, which is the respired C $\xi_{F_C}$ and $\xi_{D_C}$:
 
 $$
-\frac{dR_C}{dt}= (1-h) k_1 r F_C + (1-h) k_1 r D_C + k_2 r L_C
+\xi_{F_C, t}=(1-h_{F_c}) \frac{(k_1*F_{C,t}+I_{F_C,t})}{k_2-k_1}
 $$
-This flux, usually neglected when considering C since it ends up in atmosphere as $CO_2$,  is going to be particularly important when we consider $Ca^{++}$..
 
+$$
+\xi_{D_C, t}=(1- h_{D_c}) \frac{(k_1*D_{C,t}+I_{D_C,t})}{k_2-k_1}
+$$
+These fluxes, usually neglected when considering C since it ends up in atmosphere as $CO_2$, become be particularly important when we consider $Ca^{++}$.
 All these elements are connected with the corresponding $Ca^{++}$ pool or flux through $\rho$. The litter $Ca^{++}$ pool is the easiest to define as:
 $$
-L_{Ca^{++}}=L_C \cdot \rho
+L_{Ca^{++},t}=L_{C,t} \cdot \rho
 $$
-The remaining $Ca^{++}$ fluxes, that are all converging in the stream outflux from the catchment ($S$), are all coming from decomposition of organic matter and deposition. The decomposition $Ca^{++}$  flux is defined as:
+The remaining $Ca^{++}$ fluxes, that are all converging in the stream outflux from the catchment ($S$), are all coming from decomposition of organic matter and deposition. The $Ca^{++}$ flux from decomposition is the $Ca^{++}$ contained in the respired organic material and it is defined therefore as:
 
 $$
-\frac{dR_{Ca^{++}}}{dt}=\frac{dR_C}{dt} \cdot \rho
+\xi_{Ca^{++}} = \xi_{F_C, t} \cdot \rho + \xi_{D_C, t} \cdot \rho
 $$
 The deposition flux that makes it to the stream is the $Ca^{++}$ remaining from the net deposition $P_{Ca^{++}}$ after an quota is taken up by the plant for growth.
-Defining plant growth as the difference in biomass between years $\Delta B$, the $Ca^{++}$ remaining from the net deposition $P_{Ca^{++}}$ is:
+Defining plant growth as the POSITIVE difference in biomass between years $\Delta B_t$, the $Ca^{++}$ remaining from the net deposition $P_{Ca^{++}}$ is:
 
 $$
-D_{net,Ca^{++}}=P_{Ca^{++}} -  \Delta B \cdot \rho
+P_{net,Ca^{++}, t}=P_{Ca^{++},t} - max(\Delta B_t,0) \cdot \rho
 $$
-The flux can be defined considering the derivative 
-
+The writing $max(\Delta B_t,0)$is needed because we must consider only the positive differences, whenever biomass grows, since the negative differences are already considered as dead wood. In our time series we do not see increase in biomass so the net deposition is in our particular the same than the total deposition.
 The  $Ca^{++}$  outflux from the catchment is therefore defined as:
 $$
- \frac{dS_{Ca^{++}}}{dt} = P_{net,Ca^{++}} + R_{Ca^{++}}
+ S_{Ca^{++},t} = \xi_{Ca^{++}}+ P_{net,Ca^{++}, t}
 $$
