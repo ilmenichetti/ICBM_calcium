@@ -135,3 +135,5 @@ The  $Ca^{++}$  outflux from the catchment is therefore defined as:
 $$
  S_{Ca^{++},t} = \xi_{Ca^{++}}+ P_{net,Ca^{++}, t}
 $$
+
+We can now proceed to extend this model statistically, and then to implement it in a Bayesian framework.
