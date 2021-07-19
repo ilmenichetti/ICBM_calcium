@@ -1,0 +1,121 @@
+---
+title: "Calcium model equations"
+author: "Lorenzo Menichetti"
+date: "7/16/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(readxl)
+library(zoo)
+library(dfoptim)
+library(hydroGOF)
+```
+
+## Connecting the data (time series)
+
+The data we start with are all mass fluxes, of carbon (biomass and litterfall) and of calcium (all the others):
+
+```{r plot, echo=FALSE, results=FALSE, warning=FALSE, message=FALSE}
+time_series<-as.data.frame((read_excel("./Data/Collected_data_from_reports.xlsx", sheet=1)))
+dim(time_series)
+par(mfrow=c(2,3))
+for(i in 1:6){
+plot(colnames(time_series[i,3:31]),time_series[i,3:31], ylab = time_series[i,2], xlab="Years", main= time_series[i,1])
+  lines(na.approx(ts(as.numeric(time_series[i,3:31]), start=1991, end=2019)), lty=2)
+  }
+```
+Biomas is converted from Mg to Kg assuming 0.45 g C content per g of dry weight biomass.
+
+```{r plot_litter, echo=FALSE, results=FALSE, warning=FALSE, message=FALSE}
+plot(colnames(time_series[i,3:31]),time_series[1,3:31]*0.45*1000, ylab = time_series[6,2], xlab="Years", main= time_series[i,1])
+lines(na.approx(ts(as.numeric(time_series[1,3:31]*0.45*1000), start=1991, end=2019)), lty=2)
+```
+
+
+
+These data are complemented by litter decay data. Each year litterbags are buried and retrieved after 1, 2 and 3 years. These three values can be combined in a normalization parameter of an exponential function. We chose for practical reasons (I just calibrated it) the exponential function of ICBM, simplifying it to consider only one pool and to consider the decay of a fixed amount of organic mass (referenced to 100 in order to utilize percentages, since the data are reported in percentage)
+
+$$
+100 \cdot e^{(-k \cdot time \cdot r)}
+$$
+Where for $k$ I assumed the recently calibrated value of 0.40.
+I then proceeded to calibrate this simplified exponential decay model on the triplets (decay at 1, 2 and 3 years) from each year:
+
+```{r revalue, echo=FALSE}
+
+#exponential function (in percent of materail decayed)
+exp_decay_percent<-function(time, r){
+  k=0.400297610547104 #ICBM k1 recalibration
+  100*exp(-k*time*r)
+}
+
+#cost function
+exp_decay_fit<-function(x){
+  ts_sim<-exp_decay_percent(seq(1:3), x)
+  return(rmse(ts, ts_sim))
+}
+
+#fitting the cost function to the vector
+r_vec<-c()
+for(i in 9:31){
+ts<-time_series[7:9,i]
+r_vec[i]<-optimize(exp_decay_fit, interval=c(0,10))$minimum
+}
+plot(colnames(time_series[i,3:31]),r_vec[3:31], xlab="Years",  ylab="Decomposition scaling", pch=17, main="r scaling factor (assuming ICBM2022 kinetic of decay)")
+
+```
+
+These scaling factors are going to be used as modifiers of the kinetic terms in the decay model to summarize every ecological influence on decomposition. These will be mainly due to vairying moisture and temperature, but nonetheless being directly measured with an experimental approach we do not need to worry about other eventual more complex ecological influences since they would be anyway captured in the scaling value of each year.
+
+We now proceed to define the model connecting our data with probabilistic terms.
+We (initially) assume a constant stoichiometric rate between C and Ca, $\rho= \frac{Ca^{++}}{C}$. $Ca^{++}$ is released from organic material when this decomposes. This allows us to work directly with the organic matter in the system and consider then the $Ca^{++}$ stoichiometrically.
+The model approximates the organic matter in the system as two different qualities, each following a specific kinetic. The fast pools are represented by decomposing organic material of plant origin, decomposing with kinetic $k_1$, and the slow pool consist of already decomposed organic material (for example humified litter or soil organic matter, all approximated in this model as litter, $L_C$) decomposing with kinetic $k_2$.
+The sources of organic material (defining two fast pools) considered in the model are litterfall ($F_C$) and CWD (Coarse Dead Wood) from dead trees ($D_C$), each defined as a separate flux of C. We assume both these materials to decompose with the same kinetic $k \cdot r$. 
+
+
+The two fast pools, akin to the Y pool in the original ICBM formulation, are the litterfall $F$:
+$$
+\frac{dF_C}{dt}= i_{F_c} - k_1 r F_C
+$$
+and the coarse dead wood $D$:
+$$
+\frac{dD_C}{dt}= i_{D_c} - k_1 r D_C
+$$
+Where $i_{F_c}$ and $i_{D_c}$ are the C inputs from litterfall and CWD.
+
+A fraction ($h$) of these two pools is then decomposed further into the slower pool $L_C$, which itself decomposes at speed $k_2$:
+
+
+$$
+\frac{dL_C}{dt}= h k_1 r F_C + h k_1 r D_C - k_2 r L_C
+$$
+This allows us to identify another pool, defined implicitly in the original ICBM formulation, which is the amount of organic matter respired $R$.
+
+$$
+\frac{dR_C}{dt}= (1-h) k_1 r F_C + (1-h) k_1 r D_C + k_2 r L_C
+$$
+This flux, usually neglected when considering C since it ends up in atmosphere as $CO_2$,  is going to be particularly important when we consider $Ca^{++}$..
+
+All these elements are connected with the corresponding $Ca^{++}$ pool or flux through $\rho$. The litter $Ca^{++}$ pool is the easiest to define as:
+$$
+L_{Ca^{++}}=L_C \cdot \rho
+$$
+The remaining $Ca^{++}$ fluxes, that are all converging in the stream outflux from the catchment ($S$), are all coming from decomposition of organic matter and deposition. The decomposition $Ca^{++}$  flux is defined as:
+
+$$
+\frac{dR_{Ca^{++}}}{dt}=\frac{dR_C}{dt} \cdot \rho
+$$
+The deposition flux that makes it to the stream is the $Ca^{++}$ remaining from the net deposition $P_{Ca^{++}}$ after an quota is taken up by the plant for growth.
+Defining plant growth as the difference in biomass between years $\Delta B$, the $Ca^{++}$ remaining from the net deposition $P_{Ca^{++}}$ is:
+
+$$
+D_{net,Ca^{++}}=P_{Ca^{++}} -  \Delta B \cdot \rho
+$$
+The flux can be defined considering the derivative 
+
+The  $Ca^{++}$  outflux from the catchment is therefore defined as:
+$$
+ \frac{dS_{Ca^{++}}}{dt} = P_{net,Ca^{++}} + R_{Ca^{++}}
+$$
